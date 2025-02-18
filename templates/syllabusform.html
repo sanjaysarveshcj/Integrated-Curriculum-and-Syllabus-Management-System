@@ -282,7 +282,7 @@ form button[type="button"]:hover {
     <!-- Main Content -->
     <main class="main-content">
       <h2>Enter Course Details</h2>
-      <form id="courseForm" method="POST" action="/generate" enctype="multipart/form-data">
+      <form id="courseForm" method="POST" action="{{ url_for('syllabusform') }}" enctype="multipart/form-data">
         <!-- Heading Section -->
         <div class="section" id="headingSection">
           <h3>Heading</h3>
