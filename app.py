@@ -1,24 +1,33 @@
-from flask import Flask, render_template, request, redirect, url_for, flash, session
-from flask_sqlalchemy import SQLAlchemy
-from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
+from flask import Flask, render_template, request, redirect, url_for, flash, session, send_file
+from flask_login import LoginManager, login_user, login_required, logout_user, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
-import os
-from drive_helper import get_google_drive_service, create_curriculum_structure
+from drive_helper import create_directory_structure, get_viewable_folder_id, get_google_drive_service
+from models import db, User, DriveDirectory
+from dotenv import load_dotenv
 from google_auth_oauthlib.flow import Flow
 from google.oauth2.credentials import Credentials
-from dotenv import load_dotenv
-from datetime import timedelta
-import re
-from flask import Flask, request, send_file, render_template
 from docx import Document
+from docxtpl import DocxTemplate
 import os
 import io
-import re 
-from docx.shared import Pt 
-from docx.oxml import OxmlElement
-from docx.oxml.ns import qn
-from docxtpl import DocxTemplate
+import re
 import logging
+from datetime import timedelta
+
+app = Flask(__name__)
+app.config['SECRET_KEY'] = 'your-secret-key'
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///users.db'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+app.permanent_session_lifetime = timedelta(minutes=30)
+
+db.init_app(app)
+login_manager = LoginManager()
+login_manager.init_app(app)
+login_manager.login_view = 'login'
+
+@login_manager.user_loader
+def load_user(user_id):
+    return User.query.get(int(user_id))
 
 # Load environment variables
 load_dotenv()
@@ -26,33 +35,11 @@ load_dotenv()
 # Allow OAuth2 insecure transport for development
 os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'
 
-app = Flask(__name__)
-logging.basicConfig(level=logging.INFO)
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'your-secret-key-here')
 app.config['SESSION_TYPE'] = 'filesystem'
-app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(minutes=30)
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///users.db'
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-db = SQLAlchemy(app)
-login_manager = LoginManager()
-login_manager.init_app(app)
-login_manager.login_view = 'login'
 
 CURRICULUM_FOLDER_ID = "11efeP3LJ23w2lFt1AJI_jJBNyseRHPfn"  # Your main folder ID
-
-class User(UserMixin, db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(80), nullable=False)
-    password_hash = db.Column(db.String(120), nullable=False)
-    email = db.Column(db.String(120), unique=True, nullable=False)
-    role = db.Column(db.String(20), nullable=False)  # 'principal', 'hod', 'advisor', 'teacher'
-    department = db.Column(db.String(50))
-    created_by = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
-
-@login_manager.user_loader
-def load_user(user_id):
-    return User.query.get(int(user_id))
 
 @app.route('/')
 def index():
@@ -93,26 +80,69 @@ def principal_dashboard():
 @login_required
 def hod_dashboard():
     if current_user.role != 'hod':
-        return redirect(url_for('login'))
-    staff = User.query.filter(
-        (User.role == 'advisor') | (User.role == 'teacher'),
-        User.created_by == current_user.id
+        flash('Access denied')
+        return redirect(url_for('index'))
+        
+    # Get staff members under this HOD
+    staff = User.query.filter_by(
+        department=current_user.department,
+        created_by=current_user.id
     ).all()
-    return render_template('hod_dashboard.html', staff=staff)
+    
+    # Get department folder ID
+    dept_folder = DriveDirectory.query.filter_by(
+        department=current_user.department,
+        type='department'
+    ).first()
+    
+    folder_id = dept_folder.drive_id if dept_folder else None
+    
+    return render_template(
+        'hod_dashboard.html',
+        staff=staff,
+        folder_id=folder_id
+    )
 
 @app.route('/advisor')
 @login_required
 def advisor_dashboard():
-    if current_user.role != 'advisor' and current_user.role != 'teacher':
-        return redirect(url_for('login'))
-    return render_template('advisor_dashboard.html')
+    if current_user.role != 'advisor':
+        flash('Access denied')
+        return redirect(url_for('index'))
+        
+    # Get semester folder ID
+    semester_folder = DriveDirectory.query.filter_by(
+        department=current_user.department,
+        type='semester',
+        semester=current_user.semester
+    ).first()
+    
+    folder_id = semester_folder.drive_id if semester_folder else None
+    
+    return render_template('advisor_dashboard.html', folder_id=folder_id)
 
 @app.route('/teacher')
 @login_required
 def teacher_dashboard():
     if current_user.role != 'teacher':
-        return redirect(url_for('login'))
-    return render_template('teacher_dashboard.html')
+        flash('Access denied')
+        return redirect(url_for('index'))
+        
+    # Get subjects folder ID
+    subjects_folder = DriveDirectory.query.filter_by(
+        department=current_user.department,
+        type='subject',
+        semester=current_user.semester
+    ).first()
+    
+    folder_id = subjects_folder.drive_id if subjects_folder else None
+    
+    return render_template('teacher_dashboard.html', folder_id=folder_id)
+
+@app.route('/front_form')
+@login_required
+def front_form_redirect():
+    return redirect(url_for('frontform'))
 
 @app.route('/frontform', methods=['GET', 'POST']) 
 @login_required
@@ -267,28 +297,63 @@ def generate_doc():
 @app.route('/create_user', methods=['POST'])
 @login_required
 def create_user():
-    username = request.form.get('username')
-    password = request.form.get('password')
-    email = request.form.get('email')
-    role = request.form.get('role')
-    department = request.form.get('department')
-
-    if User.query.filter_by(username=username).first():
-        flash('Username already exists')
-        return redirect(request.referrer)
-
-    new_user = User(
-        username=username,
-        password_hash=generate_password_hash(password),
-        email=email,
-        role=role,
-        department=department,
-        created_by=current_user.id
-    )
-    db.session.add(new_user)
-    db.session.commit()
-    flash('User created successfully')
-    return redirect(request.referrer)
+    if current_user.role == 'principal' and request.form.get('role') == 'hod':
+        username = request.form.get('username')
+        password = request.form.get('password')
+        email = request.form.get('email')
+        department = request.form.get('department')
+        
+        if User.query.filter_by(username=username).first():
+            flash('Username already exists')
+            return redirect(url_for('principal_dashboard'))
+            
+        if User.query.filter_by(email=email).first():
+            flash('Email already exists')
+            return redirect(url_for('principal_dashboard'))
+            
+        hod = User(
+            username=username,
+            email=email,
+            role='hod',
+            department=department,
+            created_by=current_user.id
+        )
+        hod.set_password(password)
+        db.session.add(hod)
+        db.session.commit()
+        flash('HOD account created successfully')
+        return redirect(url_for('principal_dashboard'))
+        
+    elif current_user.role == 'hod':
+        username = request.form.get('username')
+        password = request.form.get('password')
+        email = request.form.get('email')
+        role = request.form.get('role')
+        semester = request.form.get('semester')
+        
+        if User.query.filter_by(username=username).first():
+            flash('Username already exists')
+            return redirect(url_for('hod_dashboard'))
+            
+        if User.query.filter_by(email=email).first():
+            flash('Email already exists')
+            return redirect(url_for('hod_dashboard'))
+            
+        staff = User(
+            username=username,
+            email=email,
+            role=role,
+            department=current_user.department,
+            semester=semester,
+            created_by=current_user.id
+        )
+        staff.set_password(password)
+        db.session.add(staff)
+        db.session.commit()
+        flash('Staff account created successfully')
+        return redirect(url_for('hod_dashboard'))
+        
+    return redirect(url_for('principal_dashboard'))
 
 @app.route('/delete_user/<int:user_id>')
 @login_required
@@ -332,7 +397,7 @@ def create_directory():
                 }
                 return redirect(auth_url)
             
-            create_curriculum_structure(service, department, regulation_code, CURRICULUM_FOLDER_ID)
+            create_directory_structure(service, department, regulation_code, CURRICULUM_FOLDER_ID)
             flash('Directory structure created successfully!', 'success')
         except Exception as e:
             flash(f'Error: {str(e)}', 'error')
@@ -364,7 +429,7 @@ def oauth2callback():
         if 'pending_directory' in session:
             pending_directory = session.pop('pending_directory')
             service, _ = get_google_drive_service()
-            create_curriculum_structure(service, pending_directory['department'], pending_directory['regulation_code'], CURRICULUM_FOLDER_ID)
+            create_directory_structure(service, pending_directory['department'], pending_directory['regulation_code'], CURRICULUM_FOLDER_ID)
             flash('Directory structure created successfully!', 'success')
         
         # Redirect to create directory page
@@ -507,6 +572,8 @@ def generate_doc():
 
     return send_file(file_stream, as_attachment=True, download_name="Course_Syllabus.docx",
                      mimetype="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+
+
 
 def replace_semester(doc, semester):
     """Replaces the {Semester} placeholder with the actual semester value."""
@@ -656,11 +723,9 @@ def replace_prerequisites(doc, prerequisites):
 
             # ✅ Insert Title Above Without Extra Blank Paragraph
             title_paragraph = paragraph.insert_paragraph_before("")
-            title_paragraph.style = paragraph.style  
-            title_paragraph.paragraph_format.left_indent = paragraph.paragraph_format.left_indent  
-            title_paragraph.paragraph_format.first_line_indent = paragraph.paragraph_format.first_line_indent  
-            title_paragraph.paragraph_format.space_before = Pt(12)  # 🔥 Add space before title
-            title_paragraph.paragraph_format.space_after = Pt(6)   # 🔥 Add space after title
+            title_paragraph.style = paragraph.style  # Keep the same style
+            title_paragraph.paragraph_format.left_indent = paragraph_format.left_indent  # Copy indentation
+            title_paragraph.paragraph_format.first_line_indent = paragraph_format.first_line_indent  # Copy first-line indent
 
             title_run = title_paragraph.add_run(title)
             title_run.bold = True
@@ -671,9 +736,10 @@ def replace_prerequisites(doc, prerequisites):
 
             # ✅ Remove the paragraph if `<REMOVE>` is present
             if "<REMOVE>" in paragraph.text:
-                parent.remove(p_element)
+                p_element = paragraph._element
+                p_element.getparent().remove(p_element)
 
-            return  # ✅ Stop after first occurrence
+            return  # Stop after processing the first occurrence
   # Stop after processing the first occurrence
 
 def replace_course_format(doc, course_format):
@@ -908,7 +974,7 @@ def format_course_outcomes(doc, placeholder, course_outcomes):
 
             # Preserve paragraph formatting
             paragraph_format = paragraph.paragraph_format
-
+            
             # ✅ Insert Title Above Placeholder
             title_paragraph = paragraph.insert_paragraph_before()
             title_paragraph.style = paragraph.style
@@ -1032,16 +1098,13 @@ def replace_list_of_experiments(doc, placeholder, experiments):
     """
     for paragraph in doc.paragraphs:
         if placeholder in paragraph.text:
-            parent = paragraph._element.getparent()
-
-            # ✅ If no experiments exist, remove placeholder and exit
+            parent = paragraph._element.getparent()  # Get parent XML element
+            paragraph.text = ""  # Clear placeholder but keep paragraph position
             if not experiments:
-                parent.remove(paragraph._element)
-                return  
-
-            paragraph.text = ""  # Clear placeholder while keeping position
-
-            # Preserve paragraph formatting
+                p_element = paragraph._element
+                p_element.getparent().remove(p_element)
+                return 
+            # Preserve the document’s original paragraph format
             paragraph_format = paragraph.paragraph_format
             
             # ✅ Insert Title: "PRACTICAL EXERCISES"

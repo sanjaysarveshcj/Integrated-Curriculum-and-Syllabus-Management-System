@@ -7,56 +7,89 @@
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-gray-100">
-    <div class="flex h-screen">
+    <div class="min-h-screen flex">
         <!-- Sidebar -->
-        <div class="w-64 bg-indigo-800">
-            <div class="flex items-center justify-center h-16 bg-indigo-900">
-                <span class="text-white font-bold">Class Advisor Dashboard</span>
+        <div class="w-64 bg-white shadow-lg">
+            <div class="p-4">
+                <h2 class="text-xl font-semibold text-gray-800">Class Advisor Dashboard</h2>
+                <p class="text-sm text-gray-600">Welcome, {{ current_user.username }}</p>
+                <p class="text-sm text-gray-600">Department: {{ current_user.department }}</p>
+                <p class="text-sm text-gray-600">Semester: {{ current_user.semester }}</p>
             </div>
-            <nav class="mt-5">
-                <a href="{{ url_for('advisor_dashboard') }}" 
-                   class="flex items-center px-6 py-2 bg-indigo-700 text-gray-100">
-                    <span class="mx-3">Dashboard</span>
-                </a>
-                <a href="#" 
-                   class="flex items-center px-6 py-2 text-gray-100 hover:bg-indigo-700" onclick="document.getElementById('drive-embed').style.display='block';">
-                    <span class="mx-3">View Directory</span>
-                </a>
-                <a href="{{ url_for('frontform') }}" 
-                   class="flex items-center px-6 py-2 text-gray-100 hover:bg-indigo-700">
-                    <span class="mx-3">Create Front Form</span>
-                </a>
-                <a href="{{ url_for('syllabusform') }}" 
-                   class="flex items-center px-6 py-2 text-gray-100 hover:bg-indigo-700">
-                    <span class="mx-3">Create Syllabus</span>
-                </a>
+            <nav class="mt-4">
+                <a href="#" onclick="showSection('viewDirectory')"
+                   class="block px-4 py-2 text-gray-600 hover:bg-gray-100">View Directory</a>
+                <a href="{{ url_for('frontform') }}"
+                   class="block px-4 py-2 text-gray-600 hover:bg-gray-100">Create Front Form</a>
+                <a href="{{ url_for('syllabusform') }}"
+                   class="block px-4 py-2 text-gray-600 hover:bg-gray-100">Create Syllabus</a>
                 <a href="{{ url_for('logout') }}" 
-                   class="flex items-center px-6 py-2 text-gray-100 hover:bg-indigo-700">
-                    <span class="mx-3">Logout</span>
-                </a>
+                   class="block px-4 py-2 text-gray-600 hover:bg-gray-100">Logout</a>
             </nav>
         </div>
 
         <!-- Main Content -->
-        <div class="flex-1 flex flex-col overflow-hidden">
-            <header class="flex justify-between items-center p-4 bg-white border-b">
-                <h1 class="text-2xl font-bold">Welcome, {{ current_user.username }}</h1>
-            </header>
+        <div class="flex-1 p-8">
+            {% with messages = get_flashed_messages() %}
+                {% if messages %}
+                    {% for message in messages %}
+                        <div class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded relative mb-4">
+                            {{ message }}
+                        </div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
 
-            <main class="flex-1 overflow-x-hidden overflow-y-auto bg-gray-200 p-6">
-                <!-- Google Drive Embed -->
-                <div id="drive-embed" style="display:none;" class="bg-white shadow rounded-lg p-6 mb-6">
-                    <iframe class="drive-embed" src="https://drive.google.com/embeddedfolderview?id=11efeP3LJ23w2lFt1AJI_jJBNyseRHPfn#list" width="100%" height="500" allowfullscreen></iframe>
-                </div>
-                
-                <!-- User Info -->
+            <!-- View Directory Section -->
+            <div id="viewDirectory">
                 <div class="bg-white shadow rounded-lg p-6">
-                    <h2 class="text-lg font-medium text-gray-900">Class Advisor Information</h2>
-                    <p class="mt-2 text-sm text-gray-600">Department: {{ current_user.department }}</p>
-                    <p class="mt-1 text-sm text-gray-600">Email: {{ current_user.email }}</p>
+                    <h2 class="text-xl font-semibold mb-4">Semester Directory</h2>
+                    {% if folder_id %}
+                    <div class="w-full" style="height: 600px;">
+                        <iframe 
+                            class="drive-embed w-full h-full" 
+                            src="https://drive.google.com/embeddedfolderview?id={{ folder_id }}#grid"
+                            frameborder="0"
+                            allowfullscreen>
+                        </iframe>
+                    </div>
+                    {% else %}
+                    <p class="text-gray-600">No directory found for your semester. Please contact your HOD.</p>
+                    {% endif %}
                 </div>
-            </main>
+            </div>
+
+            <!-- Create Front Form Section -->
+            <div id="createFrontForm" class="hidden">
+                <div class="bg-white shadow rounded-lg p-6">
+                    <h2 class="text-xl font-semibold mb-4">Create Front Form</h2>
+                    <!-- Add front form creation form here -->
+                </div>
+            </div>
+
+            <!-- Create Syllabus Section -->
+            <div id="createSyllabus" class="hidden">
+                <div class="bg-white shadow rounded-lg p-6">
+                    <h2 class="text-xl font-semibold mb-4">Create Syllabus</h2>
+                    <!-- Add syllabus creation form here -->
+                </div>
+            </div>
         </div>
     </div>
+
+    <script>
+        function showSection(sectionId) {
+            // Hide all sections
+            document.getElementById('viewDirectory').classList.add('hidden');
+            document.getElementById('createFrontForm').classList.add('hidden');
+            document.getElementById('createSyllabus').classList.add('hidden');
+            
+            // Show the selected section
+            document.getElementById(sectionId).classList.remove('hidden');
+        }
+
+        // Show directory view by default
+        showSection('viewDirectory');
+    </script>
 </body>
 </html>
