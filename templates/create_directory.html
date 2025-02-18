@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Create Directory Structure</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100">
+    <div class="flex h-screen">
+        <!-- Sidebar -->
+        <div class="w-64 bg-indigo-800">
+            <div class="flex items-center justify-center h-16 bg-indigo-900">
+                <span class="text-white font-bold">Principal Dashboard</span>
+            </div>
+            <nav class="mt-5">
+                <a href="{{ url_for('principal_dashboard') }}" 
+                   class="flex items-center px-6 py-2 text-gray-100 hover:bg-indigo-700">
+                    <span class="mx-3">Manage HODs</span>
+                </a>
+                <a href="{{ url_for('create_directory') }}" 
+                   class="flex items-center px-6 py-2 bg-indigo-700 text-gray-100">
+                    <span class="mx-3">Create Directory</span>
+                </a>
+                <a href="{{ url_for('logout') }}" 
+                   class="flex items-center px-6 py-2 text-gray-100 hover:bg-indigo-700">
+                    <span class="mx-3">Logout</span>
+                </a>
+            </nav>
+        </div>
+
+        <!-- Main Content -->
+        <div class="flex-1 flex flex-col overflow-hidden">
+            <header class="flex justify-between items-center p-4 bg-white border-b">
+                <h1 class="text-2xl font-bold">Create Directory Structure</h1>
+            </header>
+
+            <main class="flex-1 overflow-x-hidden overflow-y-auto bg-gray-200 p-6">
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                    {% if messages %}
+                        {% for category, message in messages %}
+                            <div class="mb-4 p-4 rounded {% if category == 'error' %}bg-red-100 text-red-700{% else %}bg-green-100 text-green-700{% endif %}">
+                                {{ message }}
+                            </div>
+                        {% endfor %}
+                    {% endif %}
+                {% endwith %}
+
+                <div class="bg-white rounded-lg shadow p-6">
+                    <form action="{{ url_for('create_directory') }}" method="POST" class="space-y-6">
+                        <div>
+                            <label for="department" class="block text-sm font-medium text-gray-700">Department Name</label>
+                            <input type="text" name="department" id="department" required
+                                class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                        </div>
+
+                        <div>
+                            <label for="regulation_code" class="block text-sm font-medium text-gray-700">Regulation Code</label>
+                            <input type="text" name="regulation_code" id="regulation_code" required
+                                class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                        </div>
+
+                        <div class="flex justify-end">
+                            <button type="submit"
+                                class="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                                Create Directory Structure
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </main>
+        </div>
+    </div>
+</body>
+</html>

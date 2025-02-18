@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Course Document Generator</title>
+  <style>
+    /* Base Styles */
+body {
+    background-color: #f0ebf8;
+    font-family: 'Google Sans', Roboto, Arial, sans-serif;
+    margin: 0;
+    padding: 2rem;
+}
+
+h2 {
+    color: #202124;
+    font-size: 24px;
+    font-weight: 400;
+    margin-bottom: 2rem;
+}
+
+h3 {
+    color: #5f6368;
+    font-size: 16px;
+    font-weight: 500;
+    margin: 1.5rem 0 1rem;
+    text-transform: uppercase;
+}
+
+/* Flex Container for Sidebar and Main Content */
+.container {
+    display: flex;
+    max-width: 1200px;
+    margin: auto;
+    gap: 2rem;
+}
+
+/* Sidebar Styles */
+.sidebar {
+    flex: 0 0 250px;
+    background-color: #fff;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    padding: 1.5rem;
+    background: #f9f9f9;
+}
+
+.sidebar h3 {
+    font-size: 16px;
+    font-weight: 500;
+    color: #5f6368;
+    margin-bottom: 1rem;
+    text-transform: uppercase;
+}
+
+.sidebar button {
+    display: block;
+    width: 100%;
+    background-color: transparent;
+    border: 1px solid #1a73e8;
+    color: #1a73e8;
+    padding: 10px;
+    margin-bottom: 0.5rem;
+    border-radius: 5px;
+    cursor: pointer;
+    text-transform: uppercase;
+    transition: background-color 0.2s;
+}
+
+.sidebar button:hover {
+    background-color: #e8f0fe;
+}
+
+/* Main Content / Form Styles */
+.main-content {
+    flex: 1;
+    background-color: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    padding: 2rem;
+}
+
+.main-content h2 {
+    color: #202124;
+    font-size: 24px;
+    font-weight: 400;
+    margin-bottom: 2rem;
+}
+
+/* Form Element Styles */
+form label {
+    color: #202124;
+    display: block;
+    font-size: 14px;
+    font-weight: 500;
+    margin-bottom: 0.5rem;
+    margin: 0;
+    cursor: pointer; 
+}
+
+form input[type="text"],
+form textarea,
+form select,
+form input[type="number"] {
+    background-color: #fff;
+    border: 1px solid #dadce0;
+    border-radius: 4px;
+    color: #202124;
+    font-family: Roboto, Arial, sans-serif;
+    font-size: 14px;
+    margin-bottom: 1rem;
+    padding: 13px 15px;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+form input[type="text"]:focus,
+form textarea:focus,
+form input[type="number"]:focus {
+    border: 2px solid #1a73e8;
+    outline: none;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+}
+
+form textarea {
+    height: 100px;
+    resize: vertical;
+}
+
+/* Checkbox Styling */
+form input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    margin-right: 10px;
+    vertical-align: middle;
+    cursor: pointer;
+}
+
+form .checkbox-container {
+    display: inline-flex;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+
+/* Practical Periods Section (Styled like other inputs) */
+#practical_periods_section {
+    border-radius: 4px;
+    margin-top: 20px;
+    display: none;
+    box-sizing: border-box;
+}
+
+#practical_periods_section label {
+    font-size: 14px;
+    font-weight: 500;
+    color: #202124;
+    margin-bottom: 0.5rem;
+}
+
+#practical_periods_section input[type="number"] {
+    padding: 13px 15px;
+    font-size: 14px;
+    color: #202124;
+    border: 1px solid #dadce0;
+    border-radius: 4px;
+    margin-bottom: 1rem;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+#practical_periods_section input[type="number"]:focus {
+    border: 2px solid #1a73e8;
+    outline: none;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+}
+
+/* Primary Form Submit Button */
+form button[type="submit"] {
+    background-color: #1a73e8;
+    border: none;
+    border-radius: 4px;
+    color: white;
+    cursor: pointer;
+    font-family: 'Google Sans', Roboto, Arial, sans-serif;
+    font-size: 14px;
+    font-weight: 500;
+    margin-top: 1rem;
+    padding: 12px 24px;
+    text-transform: uppercase;
+    transition: background-color 0.2s;
+}
+
+form button[type="submit"]:hover {
+    background-color: #1557b0;
+}
+
+/* Generic Button for Add/Remove Actions within the Form */
+form button[type="button"] {
+    background-color: transparent;
+    border: 1px solid #1a73e8;
+    color: #1a73e8;
+    margin: 0.5rem 0;
+    padding: 10px;
+    border-radius: 5px;
+    cursor: pointer;
+    text-transform: uppercase;
+    transition: background-color 0.2s;
+}
+
+form button[type="button"]:hover {
+    background-color: #e8f0fe;
+}
+
+/* Remove Button Styling */
+.remove-btn {
+    background: #e74c3c;
+    color: white;
+    border: none;
+    padding: 5px 10px;
+    margin-left: 10px;
+    cursor: pointer;
+    border-radius: 5px;
+    font-size: 14px;
+}
+
+.remove-btn:hover {
+    background-color: #c0392b;
+}
+
+/* Section Styles */
+.section {
+    margin-bottom: 1.5rem;
+}
+
+#headingSection button,
+#courseObjectives button,
+#courseDescription button,
+#prerequisites button,
+#courseUnits button,
+#assessmentsGrading button,
+#courseOutcomes button,
+#textbooks button,
+#references button {
+    margin-top: 1rem;
+    display: inline-block;
+}
+
+/* Initially Hidden Dynamic Sections */
+#courseObjectives, 
+#courseDescription, 
+#prerequisites, 
+#courseUnits, 
+#assessmentsGrading, 
+#courseOutcomes, 
+#textbooks, 
+#references {
+    display: none;
+}
+
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Sidebar with Available Sections -->
+    <aside class="sidebar">
+      <h3>Available Sections to Add</h3>
+      <button type="button" onclick="addSection('courseObjectives')">Add Course Objectives</button>
+      <button type="button" onclick="addSection('courseDescription')">Add Course Description</button>
+      <button type="button" onclick="addSection('prerequisites')">Add Prerequisites</button>
+      <button type="button" onclick="addSection('courseUnits')">Add Course Units</button>
+      <button type="button" onclick="addSection('assessmentsGrading')">Add Assessments & Grading</button>
+      <button type="button" onclick="addSection('courseOutcomes')">Add Course Outcomes</button>
+      <button type="button" onclick="addSection('textbooks')">Add Textbooks</button>
+      <button type="button" onclick="addSection('references')">Add References</button>
+      <button type="button" onclick="addSection('listofexperiments')">Add experiments</button>
+      <button type="button" onclick="addSection('courseformat')">Add course format</button>
+      <button type="button" onclick="addSection('youtubeReferences')">Add youtube references</button>
+
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content">
+      <h2>Enter Course Details</h2>
+      <form id="courseForm" method="POST" action="/generate" enctype="multipart/form-data">
+        <!-- Heading Section -->
+        <div class="section" id="headingSection">
+          <h3>Heading</h3>
+          <label>Semester: <input type="text" name="Semester"></label><br>
+          <label>Course Name: <input type="text" name="CourseName"></label><br>
+          <label>Course Code: <input type="text" name="CourseCode"></label><br>
+          <button type="button" onclick="removeSection('headingSection')">Remove Section</button>
+        </div>
+
+        <!-- Course Objectives Section -->
+        <div class="section" id="courseObjectives" style="display:none;">
+          <h3>Course Objectives</h3>
+          <div id="objectiveFields">
+            <input type="text" name="objective" placeholder="Objective 1">
+            <input type="text" name="objective" placeholder="Objective 2">
+            <input type="text" name="objective" placeholder="Objective 3">
+            <input type="text" name="objective" placeholder="Objective 4">
+            <input type="text" name="objective" placeholder="Objective 5">
+          </div>
+          <button type="button" id="addObjective">+ Add Objective</button>
+          <button type="button" onclick="removeSection('courseObjectives')">Remove Section</button>
+        </div>
+
+        <!-- Course Description Section -->
+        <div class="section" id="courseDescription" style="display:none;">
+          <h3>Course Description</h3>
+          <textarea name="CourseDescription"></textarea>
+          <button type="button" onclick="removeSection('courseDescription')">Remove Section</button>
+        </div>
+
+        <!-- Prerequisites Section -->
+        <div class="section" id="prerequisites" style="display:none;">
+          <h3>Prerequisites</h3>
+          <textarea name="Prerequisites"></textarea>
+          <button type="button" onclick="removeSection('prerequisites')">Remove Section</button>
+        </div>
+
+        <!-- Course Units Section -->
+        <div id="courseUnits" class="section" style="display:none;">
+          <h3>Course Units</h3>
+          <div id="unitFields">
+              <!-- Initially populated unit fields (first unit) -->
+              <div class="unit-item">
+                  <input type="text" name="unit_title_1" placeholder="Unit Title 1" >
+                  <textarea name="unit_content_1" placeholder="Unit Content 1" ></textarea>
+                  <input type="number" name="unit_periods_1" placeholder="No. of Periods">
+              </div>
+          </div>
+          <button type="button" id="addUnit">+ Add Course Unit</button>
+          <button type="button" onclick="removeSection('courseUnits')">Remove Section</button>
+
+
+          <input type="checkbox" id="hidden_hasPractical" name="hasPractical" value="off" style="display:none;" >
+
+          <label>
+              <input type="checkbox" id="practical_checkbox" name="hasPractical" value="on" onchange="togglePracticalPeriods()">
+              Include Practical Periods
+          </label>
+
+        <div id="practical_periods_section" style="display:none;">
+            <h3>Practical Periods</h3>
+            <label for="practical_periods">Enter Practical Periods:</label>
+            <input type="number" id="practical_periods" name="practical_periods" placeholder="Practical Periods">
+        </div>
+
+        </div>
+
+
+        <div class="section" id="courseformat" style="display:none;">
+          <h3>COURSE FORMAT</h3>
+          <textarea name="courseformat"></textarea>
+          <button type="button" onclick="removeSection('courseformat')">Remove Section</button>
+        </div>
+
+
+        <!-- Assessments & Grading Section -->
+        <div class="section" id="assessmentsGrading" style="display:none;">
+          <h3>Assessments & Grading</h3>
+          <textarea name="AssessmentsGrading"></textarea>
+          <button type="button" onclick="removeSection('assessmentsGrading')">Remove Section</button>
+        </div>
+
+        <!-- Course Outcomes Section -->
+        <div class="section" id="courseOutcomes" style="display:none;">
+          <h3>Course Outcomes</h3>
+          <div id="outcomeFields">
+            <input type="text" name="course_outcome" placeholder="CO1">
+            <input type="text" name="course_outcome" placeholder="CO2">
+            <input type="text" name="course_outcome" placeholder="CO3">
+            <input type="text" name="course_outcome" placeholder="CO4">
+            <input type="text" name="course_outcome" placeholder="CO5">
+          </div>
+          <button type="button" id="addOutcome" onclick="addInputField('outcomeFields')">+ Add Course Outcome</button>
+          <button type="button" onclick="removeSection('courseOutcomes')">Remove Section</button>
+        </div>
+
+        <!-- Textbooks Section -->
+        <div class="section" id="textbooks" style="display:none;">
+          <h3>Textbooks</h3>
+          <div id="textbookFields">
+            <input type="text" name="textbook" placeholder="Textbook 1">
+            <input type="text" name="textbook" placeholder="Textbook 2">
+            <input type="text" name="textbook" placeholder="Textbook 3">
+          </div>
+          <button type="button" id="addTextbook" onclick="addInputField('textbookFields')">+ Add Textbook</button>
+          <button type="button" onclick="removeSection('textbooks')">Remove Section</button>
+        </div>
+
+        <!-- References Section -->
+        <div class="section" id="references" style="display:none;">
+          <h3>References</h3>
+          <div id="referenceFields">
+            <input type="text" name="reference" placeholder="Reference 1">
+            <input type="text" name="reference" placeholder="Reference 2">
+            <input type="text" name="reference" placeholder="Reference 3">
+          </div>
+          <button type="button" id="addReference" onclick="addInputField('referenceFields')">+ Add Reference</button>
+          <button type="button" onclick="removeSection('references')">Remove Section</button>
+        </div>
+
+
+        <div class="section" id="listofexperiments" style="display:none;">
+          <h3>List of Experiments</h3>
+          <div id="experimentsFields">
+              <input type="text" name="experiments" placeholder="Experiment 1">
+              <input type="text" name="experiments" placeholder="Experiment 2">
+              <input type="text" name="experiments" placeholder="Experiment 3">
+              <input type="text" name="experiments" placeholder="Experiment 4">
+              <input type="text" name="experiments" placeholder="Experiment 5">
+          </div>
+          <button type="button" id="addexperiments">+ Add Experiment</button>
+          <button type="button" onclick="removeSection('listofexperiments')">Remove Section</button> <!-- ✅ Fixed Typo -->
+      </div>
+      
+      <div id="youtubeReferences" class="section" style="display:none;">
+        <h3>YouTube References</h3>
+        <div id="youtubeFields">
+            <!-- Initially populated YouTube reference field -->
+            <div class="youtube-item">
+                <input type="text" name="youtube_title_1" placeholder="channel name">
+                <textarea name="youtube_desc_1" placeholder="description"></textarea>
+                <input type="text" name="youtube_url_1" placeholder="YouTube URL">
+            </div>
+        </div>
+        <button type="button" id="addYouTube">+ Add YouTube Reference</button>
+        <button type="button" onclick="removeSection('youtubeReferences')">Remove Section</button>
+    </div>
+    
+
+
+        <button type="submit">Generate Document</button>
+      </form>
+    </main>
+  </div>
+    <script>
+        function togglePracticalPeriods() {
+            var checkbox = document.getElementById("practical_checkbox");
+            var section = document.getElementById("practical_periods_section");
+            section.style.display = checkbox.checked ? "block" : "none";
+        }
+    </script>
+  <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>

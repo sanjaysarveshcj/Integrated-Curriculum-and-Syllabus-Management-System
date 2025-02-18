@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Course Document Generator</title>
+    <style>
+        /* Base Styles */
+body {
+    background-color: #f0ebf8;
+    font-family: 'Google Sans', Roboto, Arial, sans-serif;
+    margin: 0;
+    padding: 2rem;
+}
+
+.container {
+    display: flex;
+    max-width: 1200px;
+    margin: auto;
+    gap: 2rem;
+}
+
+/* Sidebar */
+/* Sidebar Styles */
+.sidebar {
+    position: fixed; /* Fix the sidebar position */
+    top: 0; /* Stick to the top */
+    left: 0; /* Align to the left */
+    height: 100vh; /* Full height */
+    width: 250px; /* Sidebar width */
+    background-color: #fff;
+    border-right: 1px solid #ddd;
+    padding: 1.5rem;
+    overflow-y: auto; /* Scrollable if content overflows */
+    z-index: 1000; /* Ensure it's above other elements */
+}
+
+/* Adjust the main content to prevent overlap */
+
+
+
+.sidebar button {
+    display: block;
+    width: 100%;
+    background-color: transparent;
+    border: 1px solid #1a73e8;
+    color: #1a73e8;
+    padding: 10px;
+    margin-bottom: 0.5rem;
+    border-radius: 5px;
+    cursor: pointer;
+    text-transform: uppercase;
+    transition: background-color 0.2s;
+}
+
+.sidebar button:hover {
+    background-color: #e8f0fe;
+}
+
+/* Main Content */
+.main-content {
+    flex: 1;
+    background-color: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    padding: 2rem;
+    margin-left: 270px; /* Add space for the fixed sidebar */
+
+}
+
+/* Sections */
+.section {
+    background: white;
+    padding: 15px;
+    margin-bottom: 15px;
+    border-radius: 5px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+/* Input Fields */
+input {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #dadce0;
+    border-radius: 4px;
+    font-size: 14px;
+    margin-bottom: 10px;
+}
+
+.short-input {
+    width: 50px;
+    display: inline-block;
+}
+
+.course-title {
+    width: 100%;
+    font-size: 16px;
+}
+
+/* Buttons */
+button {
+    padding: 10px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.remove-btn {
+    background: #e74c3c;
+    color: white;
+}
+
+.remove-btn:hover {
+    background: #c0392b;
+}
+
+    </style>
+
+</head>
+<body>
+    <div class="container">
+        <!-- Sidebar for Sections -->
+        <aside class="sidebar">
+            <h3>Available Sections</h3>
+            <button type="button" onclick="addSection('document_version')">Document Version</button>
+            <button type="button" onclick="addSection('definition_of_credits')">Definition of Credits</button>
+            <button type="button" onclick="addSection('structure_of_program')">Structure of Program</button>
+
+            <!-- Course Categories -->
+            <button type="button" onclick="addSection('HSMC')">HSMC</button>
+            <button type="button" onclick="addSection('BSC')">BSC</button>
+            <button type="button" onclick="addSection('ESC')">ESC</button>
+            <button type="button" onclick="addSection('PCC')">PCC</button>
+            <button type="button" onclick="addSection('ELECTIVE')">ELECTIVE</button>
+            <button type="button" onclick="addSection('OEC')">OEC</button>
+            <button type="button" onclick="addSection('MC')">MC</button>
+            <button type="button" onclick="addSection('EEC')">EEC</button>
+
+            <!-- Semester Courses -->
+            <button type="button" onclick="addSection('course_table1')">Semester I</button>
+            <button type="button" onclick="addSection('course_table2')">Semester II</button>
+            <button type="button" onclick="addSection('course_table3')">Semester III</button>
+            <button type="button" onclick="addSection('course_table4')">Semester IV</button>
+            <button type="button" onclick="addSection('course_table5')">Semester V</button>
+            <button type="button" onclick="addSection('course_table6')">Semester VI</button>
+            <button type="button" onclick="addSection('course_table7')">Semester VII</button>
+            <button type="button" onclick="addSection('course_table8')">Semester VIII</button>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <h2>Enter Course Details</h2>
+            <form id="courseForm" method="POST" action="/" enctype="multipart/form-data">
+                <div id="dynamicSections"></div>
+                <label>Regulation</label> <input type="text" name="reg">
+                <label>Department(eg:AM, cs)</label> <input type="text" name="dept">
+                <button type="submit">Generate Document</button>
+            </form>
+        </main>
+    </div>
+
+    <script>
+
+
+        document.getElementById("courseForm").addEventListener("submit", function(event) {
+            event.preventDefault(); // Prevent default form submission
+        
+            let formData = new FormData(this);
+        
+            fetch("/frontform", {
+                method: "POST",
+                body: formData
+            })
+            .then(response => response.blob())  // Convert response to binary blob
+            .then(blob => {
+                let url = window.URL.createObjectURL(blob);
+                let a = document.createElement("a");
+                a.href = url;
+                a.download = "Course_Document.docx";  // Set the file name
+                document.body.appendChild(a);
+                a.click();
+                a.remove();  // Cleanup after download
+            })
+            .catch(error => console.error("Error:", error));
+        });
+        
+        function addSection(sectionId) {
+            if (document.getElementById(sectionId)) return;
+
+            let container = document.getElementById("dynamicSections");
+            let section = document.createElement("div");
+            section.id = sectionId;
+            section.className = "section";
+            
+            let sectionTitle = sectionId.replace(/_/g, ' ').toUpperCase();
+            section.innerHTML = `<h3>${sectionTitle}</h3><div id="${sectionId}_entries"></div>
+                <button type="button" onclick="addEntry('${sectionId}')">+ Add Entry</button>
+                <button type="button" onclick="removeSection('${sectionId}')">Remove Section</button>`;
+            
+            container.appendChild(section);
+        }
+
+        function addEntry(sectionId) {
+            let container = document.getElementById(`${sectionId}_entries`);
+            let entryCount = container.children.length + 1;
+            let entryDiv = document.createElement("div");
+            entryDiv.className = "entry-section";
+
+            let formStructure = {
+                "document_version": `
+                    <label>Version:</label> <input type="text" name="${sectionId}_version_${entryCount}">
+                    <label>Date:</label> <input type="date" name="${sectionId}_date_${entryCount}">
+                    <label>Author:</label> <input type="text" name="${sectionId}_author_${entryCount}">
+                    <label>Major Updates:</label> <textarea name="${sectionId}_updates_${entryCount}"></textarea>
+                    <label>Approved By:</label> <input type="text" name="${sectionId}_approved_${entryCount}">
+                `,
+                "definition_of_credits": `
+                    <label>Lecture Hours:</label> <input type="text" name="${sectionId}_l_${entryCount}" class="short-input">
+                    <label>Tutorial Hours:</label> <input type="text" name="${sectionId}_t_${entryCount}" class="short-input">
+                    <label>Practical Hours:</label> <input type="text" name="${sectionId}_p_${entryCount}" class="short-input">
+                `,
+                "structure_of_program": `
+                    <label>S.No:</label> <input type="text" name="${sectionId}_sno_${entryCount}" class="short-input">
+                    <label>Category:</label> <input type="text" name="${sectionId}_category_${entryCount}">
+                    <label>Credits:</label> <input type="text" name="${sectionId}_credits_${entryCount}" class="short-input">
+                `,
+                "course_table8": `
+                    <label>S.No:</label> <input type="text" name="${sectionId}_sno_${entryCount}" class="short-input">
+                    <label>Theory/Practical:</label> <input type="text" name="${sectionId}_type_${entryCount}">
+                    <label>Course Code:</label> <input type="text" name="${sectionId}_course_code_${entryCount}">
+                    <label>Course Title:</label> <input type="text" name="${sectionId}_course_title_${entryCount}" class="course-title">
+                    <label>L-T-P-C:</label> <input type="text" name="${sectionId}_ltpc_${entryCount}">
+                    
+                `,
+                "course_table8": `
+                <label>S.No:</label> <input type="text" name="${sectionId}_sno_${entryCount}" class="short-input">
+                <label>Theory/Practical:</label> <input type="text" name="${sectionId}_type_${entryCount}">
+                <label>Course Code:</label> <input type="text" name="${sectionId}_course_code_${entryCount}">
+                <label>Course Title:</label> <input type="text" name="${sectionId}_course_title_${entryCount}" class="course-title">
+                <label>L-T-P-C:</label> <input type="text" name="${sectionId}_ltpc_${entryCount}">
+            <label>Total Credits:</label> <input type="text" name="${sectionId}_total_credits">            
+            `,
+            "course_table7": `
+            <label>S.No:</label> <input type="text" name="${sectionId}_sno_${entryCount}" class="short-input">
+            <label>Theory/Practical:</label> <input type="text" name="${sectionId}_type_${entryCount}">
+            <label>Course Code:</label> <input type="text" name="${sectionId}_course_code_${entryCount}">
+            <label>Course Title:</label> <input type="text" name="${sectionId}_course_title_${entryCount}" class="course-title">
+            <label>L-T-P-C:</label> <input type="text" name="${sectionId}_ltpc_${entryCount}">
+            <label>Total Credits:</label> <input type="text" name="${sectionId}_total_credits">        
+        `,      
+            "course_table6": `
+            <label>S.No:</label> <input type="text" name="${sectionId}_sno_${entryCount}" class="short-input">
+            <label>Theory/Practical:</label> <input type="text" name="${sectionId}_type_${entryCount}">
+            <label>Course Code:</label> <input type="text" name="${sectionId}_course_code_${entryCount}">
+            <label>Course Title:</label> <input type="text" name="${sectionId}_course_title_${entryCount}" class="course-title">
+            <label>L-T-P-C:</label> <input type="text" name="${sectionId}_ltpc_${entryCount}">
+            <label>Total Credits:</label> <input type="text" name="${sectionId}_total_credits">        
+        `,
+            "course_table5": `
+            <label>S.No:</label> <input type="text" name="${sectionId}_sno_${entryCount}" class="short-input">
+            <label>Theory/Practical:</label> <input type="text" name="${sectionId}_type_${entryCount}">
+            <label>Course Code:</label> <input type="text" name="${sectionId}_course_code_${entryCount}">
+            <label>Course Title:</label> <input type="text" name="${sectionId}_course_title_${entryCount}" class="course-title">
+            <label>L-T-P-C:</label> <input type="text" name="${sectionId}_ltpc_${entryCount}">
+            <label>Total Credits:</label> <input type="text" name="${sectionId}_total_credits">
+            
+        `,
+        "course_table4": `
+        <label>S.No:</label> <input type="text" name="${sectionId}_sno_${entryCount}" class="short-input">
+        <label>Theory/Practical:</label> <input type="text" name="${sectionId}_type_${entryCount}">
+        <label>Course Code:</label> <input type="text" name="${sectionId}_course_code_${entryCount}">
+        <label>Course Title:</label> <input type="text" name="${sectionId}_course_title_${entryCount}" class="course-title">
+        <label>L-T-P-C:</label> <input type="text" name="${sectionId}_ltpc_${entryCount}">
+        <label>Total Credits:</label> <input type="text" name="${sectionId}_total_credits">
+
+        `,
+        "course_table3": `
+        <label>S.No:</label> <input type="text" name="${sectionId}_sno_${entryCount}" class="short-input">
+        <label>Theory/Practical:</label> <input type="text" name="${sectionId}_type_${entryCount}">
+        <label>Course Code:</label> <input type="text" name="${sectionId}_course_code_${entryCount}">
+        <label>Course Title:</label> <input type="text" name="${sectionId}_course_title_${entryCount}" class="course-title">
+        <label>L-T-P-C:</label> <input type="text" name="${sectionId}_ltpc_${entryCount}">
+        <label>Total Credits:</label> <input type="text" name="${sectionId}_total_credits">
+
+        `,
+        "course_table2": `
+        <label>S.No:</label> <input type="text" name="${sectionId}_sno_${entryCount}" class="short-input">
+        <label>Theory/Practical:</label> <input type="text" name="${sectionId}_type_${entryCount}">
+        <label>Course Code:</label> <input type="text" name="${sectionId}_course_code_${entryCount}">
+        <label>Course Title:</label> <input type="text" name="${sectionId}_course_title_${entryCount}" class="course-title">
+        <label>L-T-P-C:</label> <input type="text" name="${sectionId}_ltpc_${entryCount}">
+        <label>Total Credits:</label> <input type="text" name="${sectionId}_total_credits">
+        `,
+        "course_table1": `
+        <label>S.No:</label> <input type="text" name="${sectionId}_sno_${entryCount}" class="short-input">
+        <label>Theory/Practical:</label> <input type="text" name="${sectionId}_type_${entryCount}">
+        <label>Course Code:</label> <input type="text" name="${sectionId}_course_code_${entryCount}">
+        <label>Course Title:</label> <input type="text" name="${sectionId}_course_title_${entryCount}" class="course-title">
+        <label>L-T-P-C:</label> <input type="text" name="${sectionId}_ltpc_${entryCount}">
+        <label>Total Credits:</label> <input type="text" name="${sectionId}_total_credits">
+        `,
+                "default": `
+                    <label>S.No:</label> <input type="text" name="${sectionId}_sno_${entryCount}" class="short-input">
+                    <label>Course Title:</label> <input type="text" name="${sectionId}_title_${entryCount}" class="course-title">
+                    <label>Semester:</label> <input type="text" name="${sectionId}_semester_${entryCount}">
+                    <label>L-T-P-C:</label> <input type="text" name="${sectionId}_ltpc_${entryCount}">
+                    <label>Total Credits:</label> <input type="text" name="${sectionId}_total_credits">
+                    
+                `
+            };
+
+            entryDiv.innerHTML = formStructure[sectionId] || formStructure["default"];
+            entryDiv.innerHTML += `<button type="button" class="remove-btn" onclick="this.parentElement.remove()">Remove Entry</button>`;
+            container.appendChild(entryDiv);
+        }
+
+        function removeSection(sectionId) {
+            let section = document.getElementById(sectionId);
+            if (section) section.remove();
+        }
+    </script>
+</body>
+</html>

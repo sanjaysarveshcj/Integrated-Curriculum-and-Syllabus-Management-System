@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HOD Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100">
+    <div class="flex h-screen">
+        <!-- Sidebar -->
+        <div class="w-64 bg-indigo-800">
+            <div class="flex items-center justify-center h-16 bg-indigo-900">
+                <span class="text-white font-bold">HOD Dashboard</span>
+            </div>
+            <nav class="mt-5">
+                <a href="{{ url_for('hod_dashboard') }}" 
+                   class="flex items-center px-6 py-2 bg-indigo-700 text-gray-100">
+                    <span class="mx-3">Manage Staff</span>
+                </a>
+                <a href="#" 
+                   class="flex items-center px-6 py-2 text-gray-100 hover:bg-indigo-700" onclick="document.getElementById('drive-embed').style.display='block';">
+                    <span class="mx-3">View Directory</span>
+                </a>
+                <a href="{{ url_for('logout') }}" 
+                   class="flex items-center px-6 py-2 text-gray-100 hover:bg-indigo-700">
+                    <span class="mx-3">Logout</span>
+                </a>
+            </nav>
+        </div>
+
+        <!-- Main Content -->
+        <div class="flex-1 flex flex-col overflow-hidden">
+            <header class="flex justify-between items-center p-4 bg-white border-b">
+                <h1 class="text-2xl font-bold">Manage Staff</h1>
+            </header>
+
+            <main class="flex-1 overflow-x-hidden overflow-y-auto bg-gray-200 p-6">
+                <!-- Google Drive Embed -->
+                <div id="drive-embed" style="display:none;" class="bg-white shadow rounded-lg p-6 mb-6">
+                    <iframe class="drive-embed" src="https://drive.google.com/embeddedfolderview?id=11efeP3LJ23w2lFt1AJI_jJBNyseRHPfn#list" width="100%" height="500" allowfullscreen></iframe>
+                </div>
+                <div class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+                    <!-- Create Staff Form -->
+                    <div class="bg-white shadow rounded-lg p-6 mb-6">
+                        <h2 class="text-lg font-medium mb-4">Create New Staff Account</h2>
+                        <form action="{{ url_for('create_user') }}" method="POST" class="space-y-4">
+                            <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700">Username</label>
+                                    <input type="text" name="username" required 
+                                        class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700">Password</label>
+                                    <input type="password" name="password" required 
+                                        class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700">Email</label>
+                                    <input type="email" name="email" required 
+                                        class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700">Role</label>
+                                    <select name="role" required 
+                                        class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                                        <option value="advisor">Class Advisor</option>
+                                        <option value="teacher">Subject Teacher</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <input type="hidden" name="department" value="{{ current_user.department }}">
+                            <button type="submit" 
+                                class="mt-4 px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                                Create Staff Account
+                            </button>
+                        </form>
+                    </div>
+
+                    <!-- Staff Table -->
+                    <div class="bg-white shadow rounded-lg overflow-hidden">
+                        <div class="px-4 py-5 sm:px-6">
+                            <h3 class="text-lg leading-6 font-medium text-gray-900">Staff List</h3>
+                        </div>
+                        <div class="border-t border-gray-200">
+                            <table class="min-w-full divide-y divide-gray-200">
+                                <thead class="bg-gray-50">
+                                    <tr>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">S.No</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Role</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="bg-white divide-y divide-gray-200">
+                                    {% for member in staff %}
+                                    <tr>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ loop.index }}</td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{{ member.username }}</td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ member.email }}</td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ member.role }}</td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                            <a href="{{ url_for('delete_user', user_id=member.id) }}" 
+                                               onclick="return confirm('Are you sure you want to delete this staff member?')"
+                                               class="text-red-600 hover:text-red-900">Delete</a>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+</body>
+</html>
