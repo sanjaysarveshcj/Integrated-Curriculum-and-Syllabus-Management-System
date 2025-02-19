@@ -1,23 +1,32 @@
-from flask import Flask, render_template, request, redirect, url_for, flash, session, send_file
-from flask_login import LoginManager, login_user, login_required, logout_user, current_user
+from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, session
+from flask_sqlalchemy import SQLAlchemy
+from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
-from drive_helper import create_directory_structure, get_viewable_folder_id, get_google_drive_service
-from models import db, User, DriveDirectory
+from google.oauth2.credentials import Credentials
+from googleapiclient.discovery import build
+from googleapiclient.http import MediaFileUpload
+from google_auth_oauthlib.flow import Flow
+import os
+import json
+import tempfile
 from docx import Document
+import docx.enum.text
 from docx.shared import Pt, Inches
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from docxtpl import DocxTemplate
-import os
 import io
 import re
 import logging
-from datetime import timedelta
+from datetime import timedelta, datetime
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 import tempfile
 from dotenv import load_dotenv
 from google_auth_oauthlib.flow import Flow
+from models import db, User, DriveDirectory, DocumentApproval
+from drive_helper import create_directory_structure, get_viewable_folder_id, get_google_drive_service
+from werkzeug.utils import secure_filename
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'your-secret-key'
@@ -369,19 +378,19 @@ def replace_youtube_references_with_formatting(doc, youtube_references):
             # Add references with proper formatting
             for index, (title, desc, url) in enumerate(youtube_references, 1):
                 # Reference number and title
-                ref_paragraph = paragraph.insert_paragraph_before()
+                ref_paragraph = paragraph.insert_paragraph_before("")
                 ref_run = ref_paragraph.add_run(f"{index}. {title}")
                 ref_run.bold = True
                 ref_run.font.size = Pt(11)
 
                 # Description
-                desc_paragraph = paragraph.insert_paragraph_before()
+                desc_paragraph = paragraph.insert_paragraph_before("")
                 desc_run = desc_paragraph.add_run(desc)
                 desc_run.bold = False
                 desc_run.font.size = Pt(11)
 
                 # URL
-                url_paragraph = paragraph.insert_paragraph_before()
+                url_paragraph = paragraph.insert_paragraph_before("")
                 url_run = url_paragraph.add_run(url)
                 url_run.bold = False
                 url_run.font.size = Pt(11)
@@ -429,7 +438,7 @@ def login():
         flash('Invalid email or password')
     return render_template('login.html')
 
-@app.route('/principal')
+@app.route('/principal_dashboard')
 @login_required
 def principal_dashboard():
     if current_user.role != 'principal':
@@ -437,7 +446,7 @@ def principal_dashboard():
     hods = User.query.filter_by(role='hod').all()
     return render_template('principal_dashboard.html', hods=hods)
 
-@app.route('/hod')
+@app.route('/hod_dashboard')
 @login_required
 def hod_dashboard():
     if current_user.role != 'hod':
@@ -464,32 +473,47 @@ def hod_dashboard():
         folder_id=folder_id
     )
 
-@app.route('/advisor')
+@app.route('/advisor_dashboard')
 @login_required
 def advisor_dashboard():
     if current_user.role != 'advisor':
-        flash('Access denied')
+        flash('Access denied. You must be an advisor.', 'error')
         return redirect(url_for('index'))
-        
-    # Get semester folder ID
-    semester_folder = DriveDirectory.query.filter_by(
-        department=current_user.department,
-        type='semester',
-        semester=current_user.semester
-    ).first()
-    
-    folder_id = semester_folder.drive_id if semester_folder else None
-    
-    return render_template('advisor_dashboard.html', folder_id=folder_id)
 
-@app.route('/teacher')
+    # Get regular document approvals
+    approval_docs = DocumentApproval.query.filter_by(
+        department=current_user.department,
+        semester=current_user.semester,
+        document_type='regular'
+    ).all()
+
+    # Get HOD approval documents
+    hod_approval_docs = DocumentApproval.query.filter_by(
+        department=current_user.department,
+        semester=current_user.semester,
+        document_type='hod'
+    ).all()
+
+    # Get syllabus approval documents
+    syllabus_approval_docs = DocumentApproval.query.filter_by(
+        department=current_user.department,
+        semester=current_user.semester,
+        document_type='syllabus'
+    ).all()
+
+    return render_template('advisor_dashboard.html', 
+                         approval_docs=approval_docs,
+                         hod_approval_docs=hod_approval_docs,
+                         syllabus_approval_docs=syllabus_approval_docs)
+
+@app.route('/teacher_dashboard')
 @login_required
 def teacher_dashboard():
     if current_user.role != 'teacher':
         flash('Access denied')
         return redirect(url_for('index'))
-        
-    # Get subjects folder ID
+    
+    # Get the subjects folder ID for the current user
     subjects_folder = DriveDirectory.query.filter_by(
         department=current_user.department,
         type='subject',
@@ -498,7 +522,13 @@ def teacher_dashboard():
     
     folder_id = subjects_folder.drive_id if subjects_folder else None
     
-    return render_template('teacher_dashboard.html', folder_id=folder_id)
+    # Get approval documents
+    approval_docs = DocumentApproval.query.filter_by(
+        department=current_user.department,
+        semester=str(current_user.semester)
+    ).all()
+    
+    return render_template('teacher_dashboard.html', folder_id=folder_id, approval_docs=approval_docs)
 
 @app.route('/front_form')
 @login_required
@@ -815,6 +845,11 @@ def oauth2callback():
         with open('token.json', 'w') as token:
             token.write(credentials.to_json())
         
+        # Check if there was a pending upload
+        if 'pending_upload' in session:
+            logging.info('Found pending upload in session')
+            return redirect(url_for('teacher_dashboard'))
+        
         # Redirect back to the original page
         next_url = session.get('next_url')
         if next_url:
@@ -823,6 +858,7 @@ def oauth2callback():
         return redirect(url_for('index'))
         
     except Exception as e:
+        logging.error('Error during authentication: %s', str(e))
         flash(f'Error during authentication: {str(e)}')
         return redirect(url_for('index'))
 
@@ -1017,6 +1053,471 @@ def generate_docx(context):
     doc_io.seek(0)
 
     return doc_io
+
+@app.route('/merge_documents', methods=['POST'])
+@login_required
+def merge_documents():
+    if current_user.role != 'teacher':
+        return jsonify({'success': False, 'message': 'Access denied'})
+    
+    try:
+        # Get subject folder
+        subject_folder = DriveDirectory.query.filter_by(
+            department=current_user.department,
+            type='subject',
+            semester=current_user.semester
+        ).first()
+        
+        if not subject_folder:
+            return jsonify({'success': False, 'message': 'Subject folder not found'})
+        
+        # Get Google Drive service
+        drive_service, _ = get_google_drive_service()
+        if not drive_service:
+            return jsonify({'success': False, 'message': 'Could not connect to Google Drive'})
+        
+        # List all documents in subject folder
+        files = drive_service.files().list(
+            q=f"'{subject_folder.drive_id}' in parents and mimeType='application/vnd.google-apps.document'",
+            fields="files(id, name)"
+        ).execute().get('files', [])
+        
+        if not files:
+            return jsonify({'success': False, 'message': 'No documents found to merge'})
+
+        # Create a new merged document
+        merged_doc = Document()
+        
+        # Download and merge each document
+        for file in files:
+            try:
+                # Export Google Doc as docx
+                doc_content = drive_service.files().export(
+                    fileId=file['id'],
+                    mimeType='application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+                ).execute()
+                
+                # Create a temporary file to store the downloaded document
+                with tempfile.NamedTemporaryFile(suffix='.docx', delete=False) as temp_doc:
+                    temp_doc.write(doc_content)
+                    temp_doc.flush()
+                    
+                    # Open the document and append its content
+                    doc = Document(temp_doc.name)
+                    
+                    # Add a page break before each document (except the first one)
+                    if merged_doc.paragraphs:
+                        merged_doc.add_paragraph().add_run().add_break(docx.enum.text.WD_BREAK.PAGE)
+                    
+                    # Add document title
+                    merged_doc.add_heading(file['name'], level=1)
+                    
+                    # Copy all elements from the document
+                    for element in doc.element.body:
+                        merged_doc.element.body.append(element)
+                    
+                    # Clean up temp file
+                    os.unlink(temp_doc.name)
+            except Exception as e:
+                print(f"Error processing file {file['name']}: {str(e)}")
+                continue
+
+        # Save merged document to temporary file
+        temp_merged = tempfile.NamedTemporaryFile(suffix='.docx', delete=False)
+        temp_merged_path = temp_merged.name
+        temp_merged.close()
+        merged_doc.save(temp_merged_path)
+
+        try:
+            # Upload merged document to Drive
+            file_metadata = {
+                'name': f'Merged_Documents_{current_user.department}_Sem{current_user.semester}',
+                'parents': [subject_folder.drive_id],
+                'mimeType': 'application/vnd.google-apps.document'
+            }
+            
+            media = MediaFileUpload(
+                temp_merged_path,
+                mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                resumable=True
+            )
+            
+            file = drive_service.files().create(
+                body=file_metadata,
+                media_body=media,
+                fields='id'
+            ).execute()
+
+            # Create approval record
+            approval = DocumentApproval(
+                department=current_user.department,
+                semester=str(current_user.semester),
+                merged_file_id=file.get('id'),
+                status='pending'
+            )
+            db.session.add(approval)
+            db.session.commit()
+
+            return jsonify({
+                'success': True,
+                'message': 'Documents merged successfully',
+                'file_id': file.get('id')
+            })
+
+        finally:
+            # Clean up temporary merged file
+            if os.path.exists(temp_merged_path):
+                os.unlink(temp_merged_path)
+
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)})
+
+@app.route('/approve_document/<doc_id>', methods=['POST'])
+@login_required
+def approve_document(doc_id):
+    if current_user.role != 'advisor':
+        return jsonify({'success': False, 'message': 'Access denied'})
+    
+    try:
+        doc = DocumentApproval.query.get(doc_id)
+        if not doc:
+            return jsonify({'success': False, 'message': 'Document not found'})
+        
+        if doc.department != current_user.department or doc.semester != str(current_user.semester):
+            return jsonify({'success': False, 'message': 'Access denied'})
+        
+        doc.status = 'approved'
+        db.session.commit()
+        
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)})
+
+@app.route('/reject_document/<doc_id>', methods=['POST'])
+@login_required
+def reject_document(doc_id):
+    if current_user.role != 'advisor':
+        return jsonify({'success': False, 'message': 'Access denied'})
+    
+    try:
+        doc = DocumentApproval.query.get(doc_id)
+        if not doc:
+            return jsonify({'success': False, 'message': 'Document not found'})
+        
+        if doc.department != current_user.department or doc.semester != str(current_user.semester):
+            return jsonify({'success': False, 'message': 'Access denied'})
+        
+        doc.status = 'rejected'
+        db.session.commit()
+        
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)})
+
+@app.route('/upload_document', methods=['POST'])
+@login_required
+def upload_document():
+    logging.info('Upload document route called')
+    if current_user.role != 'teacher':
+        logging.warning('Access denied for user: %s', current_user.username)
+        return jsonify({'success': False, 'message': 'Access denied'})
+    
+    if 'file' not in request.files:
+        logging.warning('No file uploaded')
+        return jsonify({'success': False, 'message': 'No file uploaded'})
+    
+    file = request.files['file']
+    if file.filename == '':
+        logging.warning('No file selected')
+        return jsonify({'success': False, 'message': 'No file selected'})
+    
+    temp_dir = tempfile.mkdtemp()
+    temp_file_path = None
+    
+    try:
+        # Get Google Drive service
+        drive_service, auth_url = get_google_drive_service()
+        if not drive_service:
+            if auth_url:
+                # Store the current request in session
+                session['pending_upload'] = {
+                    'filename': file.filename,
+                    'department': current_user.department,
+                    'semester': current_user.semester
+                }
+                logging.info('Redirecting to auth_url for authentication')
+                return jsonify({'success': False, 'auth_url': auth_url})
+            else:
+                logging.error('Could not connect to Google Drive and no auth URL provided')
+                return jsonify({'success': False, 'message': 'Could not connect to Google Drive'})
+        
+        # Get subject folder
+        subject_folder = DriveDirectory.query.filter_by(
+            department=current_user.department,
+            type='subject',
+            semester=current_user.semester
+        ).first()
+        
+        if not subject_folder:
+            logging.error('Subject folder not found')
+            return jsonify({'success': False, 'message': 'Subject folder not found'})
+        
+        # Save file to temporary directory
+        temp_file_path = os.path.join(temp_dir, secure_filename(file.filename))
+        file.save(temp_file_path)
+        logging.info('File saved temporarily at %s', temp_file_path)
+        
+        # Upload the file to Google Drive
+        file_metadata = {
+            'name': file.filename,
+            'mimeType': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            'parents': [subject_folder.drive_id]
+        }
+        
+        media = MediaFileUpload(
+            temp_file_path,
+            mimetype=file.content_type,
+            resumable=True
+        )
+        
+        uploaded_file = drive_service.files().create(
+            body=file_metadata,
+            media_body=media,
+            fields='id'
+        ).execute()
+        
+        logging.info('File uploaded successfully with ID: %s', uploaded_file['id'])
+        
+        # Create approval record
+        approval = DocumentApproval(
+            department=current_user.department,
+            semester=str(current_user.semester),
+            merged_file_id=uploaded_file['id'],
+            document_name=file.filename,
+            status='pending'
+        )
+        db.session.add(approval)
+        db.session.commit()
+        logging.info('Approval record created for file ID: %s', uploaded_file['id'])
+        
+        return jsonify({'success': True, 'message': 'File uploaded successfully'})
+    
+    except Exception as e:
+        logging.error('Error occurred: %s', str(e))
+        return jsonify({'success': False, 'message': str(e)})
+    
+    finally:
+        # Clean up
+        try:
+            if temp_file_path and os.path.exists(temp_file_path):
+                os.unlink(temp_file_path)
+            if temp_dir and os.path.exists(temp_dir):
+                os.rmdir(temp_dir)
+            logging.info('Temporary files cleaned up successfully')
+        except Exception as e:
+            logging.warning('Failed to clean up temporary files: %s', str(e))
+
+@app.route('/upload_hod_document', methods=['POST'])
+@login_required
+def upload_hod_document():
+    if current_user.role != 'advisor':
+        return jsonify({'success': False, 'message': 'Access denied'})
+    
+    if 'file' not in request.files:
+        return jsonify({'success': False, 'message': 'No file uploaded'})
+    
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({'success': False, 'message': 'No file selected'})
+    
+    temp_dir = tempfile.mkdtemp()
+    temp_file_path = None
+    
+    try:
+        drive_service, auth_url = get_google_drive_service()
+        if not drive_service:
+            if auth_url:
+                session['pending_upload'] = {
+                    'filename': file.filename,
+                    'department': current_user.department,
+                    'semester': current_user.semester,
+                    'document_type': 'hod'
+                }
+                return jsonify({'success': False, 'auth_url': auth_url})
+            else:
+                return jsonify({'success': False, 'message': 'Could not connect to Google Drive'})
+        
+        # Get HOD folder
+        hod_folder = DriveDirectory.query.filter_by(
+            department=current_user.department,
+            type='hod',
+            semester=current_user.semester
+        ).first()
+        
+        if not hod_folder:
+            return jsonify({'success': False, 'message': 'HOD folder not found'})
+        
+        temp_file_path = os.path.join(temp_dir, secure_filename(file.filename))
+        file.save(temp_file_path)
+        
+        file_metadata = {
+            'name': file.filename,
+            'parents': [hod_folder.drive_id]
+        }
+        
+        media = MediaFileUpload(
+            temp_file_path,
+            mimetype=file.content_type,
+            resumable=True
+        )
+        
+        uploaded_file = drive_service.files().create(
+            body=file_metadata,
+            media_body=media,
+            fields='id'
+        ).execute()
+        
+        approval = DocumentApproval(
+            department=current_user.department,
+            semester=str(current_user.semester),
+            merged_file_id=uploaded_file['id'],
+            document_name=file.filename,
+            document_type='hod',
+            status='pending'
+        )
+        db.session.add(approval)
+        db.session.commit()
+        
+        return jsonify({'success': True, 'message': 'File uploaded successfully'})
+    
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)})
+    
+    finally:
+        try:
+            if temp_file_path and os.path.exists(temp_file_path):
+                os.unlink(temp_file_path)
+            if temp_dir and os.path.exists(temp_dir):
+                os.rmdir(temp_dir)
+        except Exception as e:
+            logging.warning('Failed to clean up temporary files: %s', str(e))
+
+@app.route('/upload_syllabus', methods=['POST'])
+@login_required
+def upload_syllabus():
+    if current_user.role != 'advisor':
+        return jsonify({'success': False, 'message': 'Access denied'})
+    
+    if 'file' not in request.files:
+        return jsonify({'success': False, 'message': 'No file uploaded'})
+    
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({'success': False, 'message': 'No file selected'})
+    
+    temp_dir = tempfile.mkdtemp()
+    temp_file_path = None
+    
+    try:
+        drive_service, auth_url = get_google_drive_service()
+        if not drive_service:
+            if auth_url:
+                session['pending_upload'] = {
+                    'filename': file.filename,
+                    'department': current_user.department,
+                    'semester': current_user.semester,
+                    'document_type': 'syllabus'
+                }
+                return jsonify({'success': False, 'auth_url': auth_url})
+            else:
+                return jsonify({'success': False, 'message': 'Could not connect to Google Drive'})
+        
+        # Get syllabus folder
+        syllabus_folder = DriveDirectory.query.filter_by(
+            department=current_user.department,
+            type='syllabus',
+            semester=current_user.semester
+        ).first()
+        
+        if not syllabus_folder:
+            return jsonify({'success': False, 'message': 'Syllabus folder not found'})
+        
+        temp_file_path = os.path.join(temp_dir, secure_filename(file.filename))
+        file.save(temp_file_path)
+        
+        file_metadata = {
+            'name': file.filename,
+            'parents': [syllabus_folder.drive_id]
+        }
+        
+        media = MediaFileUpload(
+            temp_file_path,
+            mimetype=file.content_type,
+            resumable=True
+        )
+        
+        uploaded_file = drive_service.files().create(
+            body=file_metadata,
+            media_body=media,
+            fields='id'
+        ).execute()
+        
+        approval = DocumentApproval(
+            department=current_user.department,
+            semester=str(current_user.semester),
+            merged_file_id=uploaded_file['id'],
+            document_name=file.filename,
+            document_type='syllabus',
+            status='pending'
+        )
+        db.session.add(approval)
+        db.session.commit()
+        
+        return jsonify({'success': True, 'message': 'File uploaded successfully'})
+    
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)})
+    
+    finally:
+        try:
+            if temp_file_path and os.path.exists(temp_file_path):
+                os.unlink(temp_file_path)
+            if temp_dir and os.path.exists(temp_dir):
+                os.rmdir(temp_dir)
+        except Exception as e:
+            logging.warning('Failed to clean up temporary files: %s', str(e))
+
+@app.route('/approve_syllabus/<int:doc_id>', methods=['POST'])
+@login_required
+def approve_syllabus(doc_id):
+    if current_user.role != 'advisor':
+        return jsonify({'success': False, 'message': 'Access denied'})
+    
+    doc = DocumentApproval.query.get_or_404(doc_id)
+    if doc.department != current_user.department or doc.semester != str(current_user.semester):
+        return jsonify({'success': False, 'message': 'Access denied'})
+    
+    doc.status = 'approved'
+    doc.approved_at = datetime.utcnow()
+    db.session.commit()
+    
+    return jsonify({'success': True, 'message': 'Document approved successfully'})
+
+@app.route('/reject_syllabus/<int:doc_id>', methods=['POST'])
+@login_required
+def reject_syllabus(doc_id):
+    if current_user.role != 'advisor':
+        return jsonify({'success': False, 'message': 'Access denied'})
+    
+    doc = DocumentApproval.query.get_or_404(doc_id)
+    if doc.department != current_user.department or doc.semester != str(current_user.semester):
+        return jsonify({'success': False, 'message': 'Access denied'})
+    
+    doc.status = 'rejected'
+    doc.rejected_at = datetime.utcnow()
+    db.session.commit()
+    
+    return jsonify({'success': True, 'message': 'Document rejected successfully'})
 
 if __name__ == '__main__':
     with app.app_context():

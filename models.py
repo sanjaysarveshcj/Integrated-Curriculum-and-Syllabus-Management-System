@@ -23,10 +23,28 @@ class User(UserMixin, db.Model):
 
 class DriveDirectory(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    drive_id = db.Column(db.String(100), nullable=False)
-    name = db.Column(db.String(100), nullable=False)
-    parent_id = db.Column(db.String(100))
-    department = db.Column(db.String(50))
-    type = db.Column(db.String(20))  # 'department', 'semester', 'subject'
-    semester = db.Column(db.Integer)
+    department = db.Column(db.String(100), nullable=False)
+    semester = db.Column(db.String(10), nullable=False)
+    drive_id = db.Column(db.String(100), nullable=False)  # Google Drive folder ID
+    type = db.Column(db.String(20), nullable=False)  # semester, subject, hod, syllabus
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    def __repr__(self):
+        return f'<DriveDirectory {self.department} {self.semester} {self.type}>'
+
+class DocumentApproval(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    department = db.Column(db.String(100), nullable=False)
+    semester = db.Column(db.String(10), nullable=False)
+    merged_file_id = db.Column(db.String(100))  # Google Drive file ID
+    document_name = db.Column(db.String(255))  # Name of the document
+    document_type = db.Column(db.String(20), default='regular')  # regular, hod, syllabus
+    status = db.Column(db.String(20), default='pending')  # pending, approved, rejected
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)  # Timestamp when sent for approval
+    approved_at = db.Column(db.DateTime, nullable=True)  # Timestamp when approved
+    rejected_at = db.Column(db.DateTime, nullable=True)  # Timestamp when rejected
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    def __repr__(self):
+        return f'<DocumentApproval {self.department} {self.semester}>'

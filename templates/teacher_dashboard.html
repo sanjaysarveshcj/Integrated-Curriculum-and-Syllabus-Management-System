@@ -16,11 +16,13 @@
                 <p class="text-sm text-gray-600">Department: {{ current_user.department }}</p>
                 <p class="text-sm text-gray-600">Semester: {{ current_user.semester }}</p>
             </div>
-            <nav class="mt-4">
+            <nav class="flex flex-col">
                 <a href="#" onclick="showSection('viewDirectory')"
                    class="block px-4 py-2 text-gray-600 hover:bg-gray-100">View Subject Files</a>
                 <a href="{{ url_for('syllabusform') }}"
                    class="block px-4 py-2 text-gray-600 hover:bg-gray-100">Create Syllabus</a>
+                <a href="#" onclick="showSection('caApproval')"
+                   class="block px-4 py-2 text-gray-600 hover:bg-gray-100">Approval from CA</a>
                 <a href="{{ url_for('logout') }}" 
                    class="block px-4 py-2 text-gray-600 hover:bg-gray-100">Logout</a>
             </nav>
@@ -41,33 +43,134 @@
             <!-- View Directory Section -->
             <div id="viewDirectory">
                 <div class="bg-white shadow rounded-lg p-6">
-                    <h2 class="text-xl font-semibold mb-4">Subject Files</h2>
+                    <h2 class="text-xl font-semibold mb-4">Department Directory</h2>
                     {% if folder_id %}
-                    <div class="w-full" style="height: 600px;">
-                        <iframe 
-                            class="drive-embed w-full h-full" 
-                            src="https://drive.google.com/embeddedfolderview?id={{ folder_id }}#grid"
-                            frameborder="0"
-                            allowfullscreen>
-                        </iframe>
+                    <div class="drive-folder-container" style="width: 100%; height: 600px;">
+                        <iframe class="drive-embed" 
+                                src="https://drive.google.com/embeddedfolderview?id={{ folder_id }}#grid"
+                                style="width: 100%; height: 100%; border: none;"
+                                allowfullscreen></iframe>
                     </div>
                     {% else %}
-                    <p class="text-gray-600">No subject folder found for your semester. Please contact your HOD.</p>
+                    <p>No directory found for your department. Please contact your HOD.</p>
                     {% endif %}
                 </div>
             </div>
 
-    <script>
-        function showSection(sectionId) {
-            // Hide all sections
-            document.getElementById('viewDirectory').classList.add('hidden');
-            
-            // Show the selected section
-            document.getElementById(sectionId).classList.remove('hidden');
-        }
+            <!-- CA Approval Section -->
+            <div id="caApproval" class="hidden">
+                <div class="bg-white shadow rounded-lg p-6">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-xl font-semibold">CA Approval Status</h2>
+                        <input type="file" id="fileInput" class="hidden" accept=".docx, .pdf" />
+                        <button onclick="document.getElementById('fileInput').click()" class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">
+                            Upload Document
+                        </button>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full bg-white">
+                            <thead class="bg-gray-100">
+                                <tr>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">S.No</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Document Name</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-gray-200">
+                                {% for doc in approval_docs %}
+                                <tr>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ loop.index }}</td>
+                                    <td class="px-6 py-4 whitespace-nowrap">{{ doc.document_name }}</td>
+                                    <td class="px-6 py-4 whitespace-nowrap">
+                                        {% if doc.status == 'pending' %}
+                                            <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-100 text-yellow-800">
+                                                Pending
+                                            </span>
+                                        {% elif doc.status == 'approved' %}
+                                            <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
+                                                Approved
+                                            </span>
+                                        {% else %}
+                                            <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">
+                                                Rejected
+                                            </span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                        <a href="https://docs.google.com/document/d/{{ doc.merged_file_id }}/edit" 
+                                           target="_blank"
+                                           class="text-indigo-600 hover:text-indigo-900">
+                                            View
+                                        </a>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
 
-        // Show directory view by default
-        showSection('viewDirectory');
-    </script>
+            <script>
+            document.getElementById('fileInput').addEventListener('change', function() {
+                const file = this.files[0];
+                if (file) {
+                    const formData = new FormData();
+                    formData.append('file', file);
+                    fetch('/upload_document', {
+                        method: 'POST',
+                        body: formData
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            alert('Document uploaded successfully!');
+                            location.reload();
+                        } else if (data.auth_url) {
+                            // If we get an auth_url, redirect to it
+                            window.location.href = data.auth_url;
+                        } else {
+                            alert('Error: ' + data.message);
+                        }
+                    });
+                }
+            });
+            </script>
+
+            <script>
+            function mergeDocuments() {
+                if (confirm('Are you sure you want to merge all documents and submit for approval?')) {
+                    fetch('/merge_documents', {
+                        method: 'POST'
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            alert('Documents merged successfully!');
+                            location.reload();
+                        } else {
+                            alert('Error: ' + data.message);
+                        }
+                    });
+                }
+            }
+            </script>
+
+            <script>
+                function showSection(sectionId) {
+                    // Hide all sections
+                    document.getElementById('viewDirectory').classList.add('hidden');
+                    document.getElementById('caApproval').classList.add('hidden');
+                    
+                    // Show the selected section
+                    document.getElementById(sectionId).classList.remove('hidden');
+                }
+
+                // Show directory view by default
+                showSection('viewDirectory');
+            </script>
+        </div>
+    </div>
 </body>
 </html>
