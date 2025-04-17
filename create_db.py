@@ -6,8 +6,14 @@ from drive_helper import create_directory_structure, get_google_drive_service
 CURRICULUM_FOLDER_ID = "11efeP3LJ23w2lFt1AJI_jJBNyseRHPfn"  # Your main folder ID
 
 with app.app_context():
-    # Only create tables that don't exist
+    # Drop the existing drive_directory table if it exists
+    db.metadata.tables['drive_directory'].drop(db.engine, checkfirst=True)
+    
+    # Create the drive_directory table with the original schema
     db.create_all()
+
+    # Only create tables that don't exist
+    # db.create_all()
 
     # Create test users if they don't exist
     test_users = [

@@ -18,7 +18,7 @@ from docxtpl import DocxTemplate
 import io
 import re
 import logging
-from datetime import timedelta, datetime
+from datetime import timedelta
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 import tempfile
@@ -477,34 +477,25 @@ def hod_dashboard():
 @login_required
 def advisor_dashboard():
     if current_user.role != 'advisor':
-        flash('Access denied. You must be an advisor.', 'error')
+        flash('Access denied')
         return redirect(url_for('index'))
-
-    # Get regular document approvals
+        
+    # Get semester folder ID
+    semester_folder = DriveDirectory.query.filter_by(
+        department=current_user.department,
+        type='semester',
+        semester=current_user.semester
+    ).first()
+    
+    folder_id = semester_folder.drive_id if semester_folder else None
+    
+    # Get approval documents
     approval_docs = DocumentApproval.query.filter_by(
         department=current_user.department,
-        semester=current_user.semester,
-        document_type='regular'
+        semester=str(current_user.semester)
     ).all()
-
-    # Get HOD approval documents
-    hod_approval_docs = DocumentApproval.query.filter_by(
-        department=current_user.department,
-        semester=current_user.semester,
-        document_type='hod'
-    ).all()
-
-    # Get syllabus approval documents
-    syllabus_approval_docs = DocumentApproval.query.filter_by(
-        department=current_user.department,
-        semester=current_user.semester,
-        document_type='syllabus'
-    ).all()
-
-    return render_template('advisor_dashboard.html', 
-                         approval_docs=approval_docs,
-                         hod_approval_docs=hod_approval_docs,
-                         syllabus_approval_docs=syllabus_approval_docs)
+    
+    return render_template('advisor_dashboard.html', folder_id=folder_id, approval_docs=approval_docs)
 
 @app.route('/teacher_dashboard')
 @login_required
@@ -1316,208 +1307,6 @@ def upload_document():
             logging.info('Temporary files cleaned up successfully')
         except Exception as e:
             logging.warning('Failed to clean up temporary files: %s', str(e))
-
-@app.route('/upload_hod_document', methods=['POST'])
-@login_required
-def upload_hod_document():
-    if current_user.role != 'advisor':
-        return jsonify({'success': False, 'message': 'Access denied'})
-    
-    if 'file' not in request.files:
-        return jsonify({'success': False, 'message': 'No file uploaded'})
-    
-    file = request.files['file']
-    if file.filename == '':
-        return jsonify({'success': False, 'message': 'No file selected'})
-    
-    temp_dir = tempfile.mkdtemp()
-    temp_file_path = None
-    
-    try:
-        drive_service, auth_url = get_google_drive_service()
-        if not drive_service:
-            if auth_url:
-                session['pending_upload'] = {
-                    'filename': file.filename,
-                    'department': current_user.department,
-                    'semester': current_user.semester,
-                    'document_type': 'hod'
-                }
-                return jsonify({'success': False, 'auth_url': auth_url})
-            else:
-                return jsonify({'success': False, 'message': 'Could not connect to Google Drive'})
-        
-        # Get HOD folder
-        hod_folder = DriveDirectory.query.filter_by(
-            department=current_user.department,
-            type='hod',
-            semester=current_user.semester
-        ).first()
-        
-        if not hod_folder:
-            return jsonify({'success': False, 'message': 'HOD folder not found'})
-        
-        temp_file_path = os.path.join(temp_dir, secure_filename(file.filename))
-        file.save(temp_file_path)
-        
-        file_metadata = {
-            'name': file.filename,
-            'parents': [hod_folder.drive_id]
-        }
-        
-        media = MediaFileUpload(
-            temp_file_path,
-            mimetype=file.content_type,
-            resumable=True
-        )
-        
-        uploaded_file = drive_service.files().create(
-            body=file_metadata,
-            media_body=media,
-            fields='id'
-        ).execute()
-        
-        approval = DocumentApproval(
-            department=current_user.department,
-            semester=str(current_user.semester),
-            merged_file_id=uploaded_file['id'],
-            document_name=file.filename,
-            document_type='hod',
-            status='pending'
-        )
-        db.session.add(approval)
-        db.session.commit()
-        
-        return jsonify({'success': True, 'message': 'File uploaded successfully'})
-    
-    except Exception as e:
-        return jsonify({'success': False, 'message': str(e)})
-    
-    finally:
-        try:
-            if temp_file_path and os.path.exists(temp_file_path):
-                os.unlink(temp_file_path)
-            if temp_dir and os.path.exists(temp_dir):
-                os.rmdir(temp_dir)
-        except Exception as e:
-            logging.warning('Failed to clean up temporary files: %s', str(e))
-
-@app.route('/upload_syllabus', methods=['POST'])
-@login_required
-def upload_syllabus():
-    if current_user.role != 'advisor':
-        return jsonify({'success': False, 'message': 'Access denied'})
-    
-    if 'file' not in request.files:
-        return jsonify({'success': False, 'message': 'No file uploaded'})
-    
-    file = request.files['file']
-    if file.filename == '':
-        return jsonify({'success': False, 'message': 'No file selected'})
-    
-    temp_dir = tempfile.mkdtemp()
-    temp_file_path = None
-    
-    try:
-        drive_service, auth_url = get_google_drive_service()
-        if not drive_service:
-            if auth_url:
-                session['pending_upload'] = {
-                    'filename': file.filename,
-                    'department': current_user.department,
-                    'semester': current_user.semester,
-                    'document_type': 'syllabus'
-                }
-                return jsonify({'success': False, 'auth_url': auth_url})
-            else:
-                return jsonify({'success': False, 'message': 'Could not connect to Google Drive'})
-        
-        # Get syllabus folder
-        syllabus_folder = DriveDirectory.query.filter_by(
-            department=current_user.department,
-            type='syllabus',
-            semester=current_user.semester
-        ).first()
-        
-        if not syllabus_folder:
-            return jsonify({'success': False, 'message': 'Syllabus folder not found'})
-        
-        temp_file_path = os.path.join(temp_dir, secure_filename(file.filename))
-        file.save(temp_file_path)
-        
-        file_metadata = {
-            'name': file.filename,
-            'parents': [syllabus_folder.drive_id]
-        }
-        
-        media = MediaFileUpload(
-            temp_file_path,
-            mimetype=file.content_type,
-            resumable=True
-        )
-        
-        uploaded_file = drive_service.files().create(
-            body=file_metadata,
-            media_body=media,
-            fields='id'
-        ).execute()
-        
-        approval = DocumentApproval(
-            department=current_user.department,
-            semester=str(current_user.semester),
-            merged_file_id=uploaded_file['id'],
-            document_name=file.filename,
-            document_type='syllabus',
-            status='pending'
-        )
-        db.session.add(approval)
-        db.session.commit()
-        
-        return jsonify({'success': True, 'message': 'File uploaded successfully'})
-    
-    except Exception as e:
-        return jsonify({'success': False, 'message': str(e)})
-    
-    finally:
-        try:
-            if temp_file_path and os.path.exists(temp_file_path):
-                os.unlink(temp_file_path)
-            if temp_dir and os.path.exists(temp_dir):
-                os.rmdir(temp_dir)
-        except Exception as e:
-            logging.warning('Failed to clean up temporary files: %s', str(e))
-
-@app.route('/approve_syllabus/<int:doc_id>', methods=['POST'])
-@login_required
-def approve_syllabus(doc_id):
-    if current_user.role != 'advisor':
-        return jsonify({'success': False, 'message': 'Access denied'})
-    
-    doc = DocumentApproval.query.get_or_404(doc_id)
-    if doc.department != current_user.department or doc.semester != str(current_user.semester):
-        return jsonify({'success': False, 'message': 'Access denied'})
-    
-    doc.status = 'approved'
-    doc.approved_at = datetime.utcnow()
-    db.session.commit()
-    
-    return jsonify({'success': True, 'message': 'Document approved successfully'})
-
-@app.route('/reject_syllabus/<int:doc_id>', methods=['POST'])
-@login_required
-def reject_syllabus(doc_id):
-    if current_user.role != 'advisor':
-        return jsonify({'success': False, 'message': 'Access denied'})
-    
-    doc = DocumentApproval.query.get_or_404(doc_id)
-    if doc.department != current_user.department or doc.semester != str(current_user.semester):
-        return jsonify({'success': False, 'message': 'Access denied'})
-    
-    doc.status = 'rejected'
-    doc.rejected_at = datetime.utcnow()
-    db.session.commit()
-    
-    return jsonify({'success': True, 'message': 'Document rejected successfully'})
 
 if __name__ == '__main__':
     with app.app_context():

@@ -66,150 +66,83 @@ def folder_exists(service, folder_name, parent_id=None):
     except Exception as e:
         raise Exception(f"Error checking folder existence: {str(e)}")
 
-def create_directory_structure(drive_service, department, semester):
+def create_directory_structure(service, department, regulation_code=None, parent_folder_id=None):
+    """Create directory structure and store information in database"""
     try:
-        # Create department folder if it doesn't exist
-        department_folder = DriveDirectory.query.filter_by(
-            department=department,
-            type='department'
-        ).first()
-
-        if not department_folder:
-            folder_metadata = {
-                'name': f'{department} Department',
+        # Create department folder
+        dept_metadata = {
+            'name': department,
+            'mimeType': 'application/vnd.google-apps.folder'
+        }
+        if parent_folder_id:
+            dept_metadata['parents'] = [parent_folder_id]
+            
+        dept_folder = service.files().create(body=dept_metadata, fields='id').execute()
+        
+        # Store department folder info
+        dept_dir = DriveDirectory(
+            drive_id=dept_folder['id'],
+            name=department,
+            type='department',
+            department=department
+        )
+        db.session.add(dept_dir)
+        
+        # Create regulation folder if provided
+        reg_folder_id = dept_folder['id']
+        if regulation_code:
+            reg_metadata = {
+                'name': regulation_code,
+                'parents': [dept_folder['id']],
                 'mimeType': 'application/vnd.google-apps.folder'
             }
-            
-            department_folder_response = drive_service.files().create(
-                body=folder_metadata,
-                fields='id'
-            ).execute()
-
-            department_folder = DriveDirectory(
-                department=department,
-                semester='',
-                drive_id=department_folder_response['id'],
-                type='department'
-            )
-            db.session.add(department_folder)
-            db.session.commit()
-
-        # Create semester folder if it doesn't exist
-        semester_folder = DriveDirectory.query.filter_by(
-            department=department,
-            semester=str(semester),
-            type='semester'
-        ).first()
-
-        if not semester_folder:
-            folder_metadata = {
-                'name': f'Semester {semester}',
-                'mimeType': 'application/vnd.google-apps.folder',
-                'parents': [department_folder.drive_id]
+            reg_folder = service.files().create(body=reg_metadata, fields='id').execute()
+            reg_folder_id = reg_folder['id']
+        
+        # Create semester folders
+        for sem in range(1, 9):
+            sem_metadata = {
+                'name': f'Semester_{sem}',
+                'parents': [reg_folder_id],
+                'mimeType': 'application/vnd.google-apps.folder'
             }
+            sem_folder = service.files().create(body=sem_metadata, fields='id').execute()
             
-            semester_folder_response = drive_service.files().create(
-                body=folder_metadata,
-                fields='id'
-            ).execute()
-
-            semester_folder = DriveDirectory(
+            # Store semester folder info
+            sem_dir = DriveDirectory(
+                drive_id=sem_folder['id'],
+                name=f'Semester_{sem}',
+                parent_id=reg_folder_id,
+                type='semester',
                 department=department,
-                semester=str(semester),
-                drive_id=semester_folder_response['id'],
-                type='semester'
+                semester=sem
             )
-            db.session.add(semester_folder)
-            db.session.commit()
-
-        # Create subject folder if it doesn't exist
-        subject_folder = DriveDirectory.query.filter_by(
-            department=department,
-            semester=str(semester),
-            type='subject'
-        ).first()
-
-        if not subject_folder:
-            folder_metadata = {
-                'name': 'Subject Documents',
-                'mimeType': 'application/vnd.google-apps.folder',
-                'parents': [semester_folder.drive_id]
+            db.session.add(sem_dir)
+            
+            # Create subjects folder
+            subj_metadata = {
+                'name': 'Subjects',
+                'parents': [sem_folder['id']],
+                'mimeType': 'application/vnd.google-apps.folder'
             }
+            subj_folder = service.files().create(body=subj_metadata, fields='id').execute()
             
-            subject_folder_response = drive_service.files().create(
-                body=folder_metadata,
-                fields='id'
-            ).execute()
-
-            subject_folder = DriveDirectory(
+            # Store subjects folder info
+            subj_dir = DriveDirectory(
+                drive_id=subj_folder['id'],
+                name='Subjects',
+                parent_id=sem_folder['id'],
+                type='subject',
                 department=department,
-                semester=str(semester),
-                drive_id=subject_folder_response['id'],
-                type='subject'
+                semester=sem
             )
-            db.session.add(subject_folder)
-            db.session.commit()
-
-        # Create HOD folder if it doesn't exist
-        hod_folder = DriveDirectory.query.filter_by(
-            department=department,
-            semester=str(semester),
-            type='hod'
-        ).first()
-
-        if not hod_folder:
-            folder_metadata = {
-                'name': 'HOD Approval Documents',
-                'mimeType': 'application/vnd.google-apps.folder',
-                'parents': [semester_folder.drive_id]
-            }
-            
-            hod_folder_response = drive_service.files().create(
-                body=folder_metadata,
-                fields='id'
-            ).execute()
-
-            hod_folder = DriveDirectory(
-                department=department,
-                semester=str(semester),
-                drive_id=hod_folder_response['id'],
-                type='hod'
-            )
-            db.session.add(hod_folder)
-            db.session.commit()
-
-        # Create syllabus folder if it doesn't exist
-        syllabus_folder = DriveDirectory.query.filter_by(
-            department=department,
-            semester=str(semester),
-            type='syllabus'
-        ).first()
-
-        if not syllabus_folder:
-            folder_metadata = {
-                'name': 'Syllabus Documents',
-                'mimeType': 'application/vnd.google-apps.folder',
-                'parents': [semester_folder.drive_id]
-            }
-            
-            syllabus_folder_response = drive_service.files().create(
-                body=folder_metadata,
-                fields='id'
-            ).execute()
-
-            syllabus_folder = DriveDirectory(
-                department=department,
-                semester=str(semester),
-                drive_id=syllabus_folder_response['id'],
-                type='syllabus'
-            )
-            db.session.add(syllabus_folder)
-            db.session.commit()
-
-        return True
+            db.session.add(subj_dir)
+        
+        db.session.commit()
+        return dept_folder['id']
     except Exception as e:
-        print(f"Error creating directory structure: {str(e)}")
-        return False
+        db.session.rollback()
+        raise Exception(f"Error creating directory structure: {str(e)}")
 
 def get_viewable_folder_id(user):
     """Get the appropriate folder ID based on user role and department"""
